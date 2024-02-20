@@ -1,0 +1,9 @@
+.iso windows server 2022
+	- https://www.microsoft.com/fr-fr/evalcenter/download-windows-server-2022
+Comparaison editeur de texte ( VSCode - PowerShell ISE )
+	- https://locall.host/vscode-vs-powershell-ise/
+Code:
+	- https://dev.to/this-is-learning/how-to-write-better-powershell-scripts-architecture-and-best-practices-emh
+	- https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_comparison_operators?view=powershell-7.4
+	- https://www.varonis.com/blog/powershell-variable-scope#:~:text=Using%20Scopes%20in%20a%20PowerShell%20Module,-A%20PowerShell%20module&text=You%20can%20author%20a%20module,shareable%20between%20the%20module's%20functions.&text=%24greeting%20%3D%20%22Hello%2C%20%24name!%22&text=%24greeting%20%3D%20%22Hello%2C%20World!%22,-%7D
+	- https://www.spguides.com/powershell-global-variable/

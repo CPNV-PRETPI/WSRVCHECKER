@@ -1,0 +1,18 @@
+ Diagrammes à faire:
+  - Flux
+  - Séquence
+  - Classes 
+  - Activité ? ( ça peut-être intéressant ? )
+  - Composants ? ( ça peut-être intéressant ? )
+
+ /!\ Vérification des accès Admin avant lancement du script /!\ 
+
+ Before code:
+  - Variables Naming -> PascalCase
+  - Flux Diagram ( Architecture of code )
+  - Schedule deliveries
+  - Where will the script be stocked
+  - PowerShell version to use -> 5.1 
+	- Create a checker at the start of the script to check 5.1 version ?
+  - Define concrete objectives with M. Glassey ( parameters to change/check )
+  - Statégie de test à définir 
