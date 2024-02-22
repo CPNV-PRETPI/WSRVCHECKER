@@ -4,130 +4,165 @@
     Windows Server 2022 Parameters checker
  
 .DESCRIPTION
-    The script objective is to check values of specific parameters of a Windows Server 2022 and report it so the administrator can check if a change is needed
-  
+    The script objective is to check values of specific parameters of a Windows Server 2022 and report it so that the administrator can check if a change is needed
+
+.PARAMETER ExecutionPolicy
+    Bypass
+
+ .PARAMETER InputFile
+    C:\Temp\Input_PreTPI.csv
+
 .PARAMETER OutputFile
-    C:\Temp\PreTPI.txt
+    C:\Temp\Output_PreTPI.csv
  
 .EXAMPLE
-    .\\Test.ps1 -ExecutionPolicy Bypass -OutputFile C:\Temp\PreTPI.txt
+    powershell.exe .\\Test.ps1 -ExecutionPolicy Bypass -InputFile C:\Temp\Input_PreTPI.csv -OutputFile C:\Temp\Output_PreTPI.csv
  
     Runs the script with the specified ExecutionPolicy and result file
 #>
 
 param(
     
-    [Parameter()]
-    [string]$ExecutionPolicy = "Bypass",
-    
+    [Parameter(Mandatory="Bypass")]
+    [string]$ExecutionPolicy,
+        
+    [Parameter(Mandatory=$true)]
+    [string]$InputFile,
+
     [Parameter(Mandatory=$true)]
     [string]$OutputFile
 )
 
-# Define the Execution Policy
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy $ExecutionPolicy -Force
-
 #region Variables
+$Script:ExecutionPolicy = $ExecutionPolicy
+$Script:InputFile = $InputFile
+$Script:OutputFile = $OutputFile
+$Script:Timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$Script:Data = ""
+$Script:Group = ""
+$Script:MemberToCheck = ""
+#endregion
 
-$ErrorActionPreference = 'Stop'
-$script:ProcessNumber = 0
-$script:ServiceNumber = 0 
-$script:data = ""
+#region Modules
+import-module ActiveDirectory
 #endregion
 
 #region Functions
 
-# Checks privilieges
+# Checks ExecutionPolicy
+function CheckExecutionPolicy{
+    # Check Executionpolicy
+    if($Script:ExecutionPolicy -ne "Bypass"){
+    Write-Host "*" -Foreground Red
+    Write-Host "* ERROR: Script ONLY runs with the ExecutionPolicy 'Bypass'!" -Foreground Red
+    Write-Host "* Script is canceled!" -Foreground Red
+    Write-Host "*" -Foreground Red
+    Exit 
+    }else{
+    Set-ExecutionPolicy -Scope Process -ExecutionPolicy $Script:ExecutionPolicy -Force
+}
+}
+# Checks Privilieges
 function CheckAdminRights {
-$IsAdmin = (New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-If (-Not $IsAdmin) {
+$Private:IsAdmin = (New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+If (-Not $Private:IsAdmin) {
   Write-Host "*" -Foreground Red
   Write-Host "* ERROR: Script is NOT running with Administrators priviledges!" -Foreground Red
   Write-Host "* Script is canceled!" -Foreground Red
   Write-Host "*" -Foreground Red
-  pause
-  Exit 20  #Exit script with 20=FailureReturnCode
-}else{
-  Write-Host "Admin Rights -> OK"
+  Exit 
 }
-}
-# Add AD group to Local Group
-function ADGroupsInLocalGroups {
-    do {
-        Write-Host "Do you want to add AD Groups in local groups?"
-        $Choice = Read-Host "Type Y or N"
-        
-        if ($Choice -eq 'Y') {
-            $DomainName = Read-Host "Please type the domain name"
-            $ADGroupName = Read-Host "Please type the exact AD group to add"
-            $LocalGroupName = Read-Host "Please type the exact local group where you want your AD group to be added"
-            
-            Add-LocalGroupMember -Group $LocalGroupName -Member ($DomainName + "/" + $ADGroupName)
-        }
-        
-    } while ($Choice -eq 'Y')
-}
-
-# Count number of processes 
-function ProcessCount {
-    $script:ProcessNumber = (Get-Process).Count
-}
-
-# Count number of services
-function ServiceCount {
-    $script:ServiceNumber = (Get-service).Count
 }
 
 # Check if data is ok
 function DataChecker {
-    #Call functionns to get process and service counts
-    ProcessCount
-    ServiceCount
+    
+    try{
+        # Extraction of the csv file
+        $Private:Csv = Import-CSV -Path $InputFile -Delimiter ";"
 
-    # Processes Checker
-    if ($script:ProcessNumber -ge 100){
-        $private:ProcessCheck = $true
-    }else{
-        $private:ProcessCheck = $False
+        # Check if csv file is empty
+        if ($Private:Csv -eq $null){
+            Write-Host "*" -Foreground Red
+            Write-Host "* ERROR: No data found" -Foreground Red
+            Write-Host "* CSV input file is empty" -Foreground Red
+            Write-Host "* Script is canceled!" -Foreground Red
+            Write-Host "*" -Foreground Red
+            Exit
+        }    
+        }catch{
+            Write-Host "*" -Foreground Red
+            Write-Host "* ERROR: Import CSV file failed" -Foreground Red
+            Write-Host "* Try to check if the CSV exists or is accessible" -Foreground Red
+            Write-Host "* Script is canceled!" -Foreground Red
+            Write-Host "*" -Foreground Red
+            Exit
+        }
     }
-    # Services Checker
-    if ($script:ServiceNumber -ge 100){
-        $private:ServiceCheck = $true
-    }else{
-        $private:ServiceCheck = $False
-    }
-    # Convert data as String
-    $script:Data = @"    
-     $private:ProcessCheck,$script:ProcessNumber
-     $private:ServiceCheck,$script:ServiceNumber
+    # Creation of head titles of the csv file
+    $Script:Data = @" 
+        Group;MemberToCheck;Validation  
 "@
-     Write-Host $script:Data
+    # Reading csv file  
+    foreach($Private:Line in $Private:Csv){
+        # Columns Assignment
+        $Private:Group = $Private:Line.'Group'
+        $Private:MemberToCheck = $Private:Line.'MemberToCheck'
+        
+        # Group Exists Checker
+        if (Get-ADGroup -Identity "$Private:Group" -ne $null){
+            Write-Host "$Private:Group exists"
+        }else{
+            Write-Host "$Private:Group doesn't exist"
+        }
+        
+        # Group Members Checker
+        $Private:GroupMemberCheck = Get-ADGroupMember -Identity $Private:Group | Where-Object {$_.name -eq $Script:Member}
+        if($Private:GroupMemberCheck){
+            $Private:MemberInGroup = $true
+        }else{
+            $Private:MemberInGroup = $False
+        }
+        
+        # Convert data as String
+        $Script:Data += @"
 
+        $Private:Group;$Private:MemberToCheck;$Private:MemberInGroup
+"@ 
+Write-Host $Script:Data  
 }
+
+
 # Extract all data to a file
 function DataExtract{
     # Check the data
     DataChecker
 
-    # Send the Converted data to a .txt file
-    $script:Data | Out-File -FilePath C:\Temp\Output.txt
+    # Converts data to an object
+    $Private:PSObject = $Script:Data | ConvertFrom-Csv
+    
+    # Gets the directory of the OutputFile
+    $Private:OutputFolder = Split-Path -Path $Script:OutputFile -Parent
 
-    # Define Date Time
-    $Timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+    # Export the data object to a CSV file
+    if (!(Test-Path "$Private:OutputFolder\$Script:Timestamp.csv")){
+        New-Item "$Private:OutputFolder\$Script:Timestamp.csv" -ItemType File
+    }
+    $Private:PSObject | Export-Csv -Path "$Private:OutputFolder\$Script:Timestamp.csv" -NoTypeInformation
 
     # Define the .zip file name
-    $ZipFolderName = "$Timestamp.zip"
+    $Private:ZipFolderName = "$Script:Timestamp.zip"
     
     # Compress .txt files to a .zip folder
-    Compress-Archive -Path "Output.txt" -DestinationPath "C:\Temp\$ZipFolderName"
+    
+    Compress-Archive -Path "$Private:OutputFolder\$Script:Timestamp.csv" -DestinationPath "$Private:OutputFolder\$Private:ZipFolderName"
 }
 #endregion
 
 #region Main
-Write-Host "Setting execution policy to: $ExecutionPolicy"
-#CheckAdminRights
-ADGroupsInLocalGroups
+CheckExecutionPolicy
+CheckAdminRights
 DataExtract
-pause
+Exit
 #endregion
 
