@@ -38,6 +38,9 @@ $Script:InputFile = $InputFile
 $Script:OutputFolder = $OutputFolder
 $Script:Timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $Script:Data = ""
+$Script:Group = ""
+$Script:MemberToCheck = ""
+$Script:Csv = ""
 #endregion
 
 #region Modules
@@ -72,91 +75,75 @@ If (-Not $Private:IsAdmin) {
 }
 
 # Check if data is ok
-function DataChecker {
-    
+function CsvInputFile {
+    # Importation of CsvFile
     try{
         # Extraction of the csv file
-        $Private:Csv = Import-CSV -Path $InputFile -Delimiter ";"
+        $Script:Csv = Import-CSV -Path $InputFile -Delimiter ";"
 
-        # Check if csv file is empty
-        if ($Private:Csv -eq $null){
-            Write-Host "*" -Foreground Red
-            Write-Host "* ERROR: No data found" -Foreground Red
-            Write-Host "* CSV input file is empty" -Foreground Red
-            Write-Host "* Script is canceled!" -Foreground Red
-            Write-Host "*" -Foreground Red
-            Exit
-        }    
         }catch{
             Write-Host "*" -Foreground Red
             Write-Host "* ERROR: Import CSV file failed" -Foreground Red
-            Write-Host "* Try to check if the CSV exists or is accessible" -Foreground Red
             Write-Host "* Script is canceled!" -Foreground Red
             Write-Host "*" -Foreground Red
             Exit
         }
-    
-    # Creation of head titles of the csv file
+    }
+
+function CsvGetdata{
+    CsvInputFile
     $Script:Data = @" 
         Group;MemberToCheck;Validation  
 "@
     # Reading csv file  
-    foreach($Private:Line in $Private:Csv){
+    foreach($Private:Line in $Script:Csv){
         # Columns Assignment
-        $Private:Group = $Private:Line.'Group'
-        $Private:MemberToCheck = $Private:Line.'MemberToCheck'
-        try{
-            # Group Exists Checker
-            if ($Private:GroupExistanceTest = Get-ADGroup -Identity $Private:Group){
-                $Private:GroupToBeWritten = $true
-                if($Private:UserExistanceTest = Get-ADUser -SamAccountName $Private:MemberToCheck){
-                    $Private:UserToBeWritten = $true
-                    # Group Members Checker
-                    if($Private:GroupMemberCheck = Get-ADGroupMember -Identity $Private:Group | Where-Object {$_.name -eq $Private:MemberToCheck}){
-                        $Private:MemberInGroup = $true
-                    }else{
-                        $Private:MemberInGroup = $False
-                    }
-        }
-        }
-    }catch{
-            $Private:GroupToBeWritten = $False
-            $Private:UserToBeWritten = $False
-            if($GroupToBeWritten = $False){
-                Write-Host "*" -Foreground Red
-                Write-Host "* ERROR: Group doesn't exists" -Foreground Red
-                Write-Host "* Try to check if '$Private:Group' exists or if the name is miswritten" -Foreground Red
-                Write-Host "* Script continues without this group" -Foreground Red
-                Write-Host "*" -Foreground Red
-            }elseif(($Private:GroupToBeWritten = $true) -and ($Private:UserToBeWritten = $False)){
-                Write-Host "*" -Foreground Red
-                Write-Host "* ERROR: User doesn't exists" -Foreground Red
-                Write-Host "* Try to check if '$Private:MembreToCheck' exists or if the name is miswritten" -Foreground Red
-                Write-Host "* Script continues without this group" -Foreground Red
-                Write-Host "*" -Foreground Red 
-            }
+        $Script:Group = $Private:Line.'Group'
+        $Script:MemberToCheck = $Private:Line.'MemberToCheck'
 
-
-    }
-    if(($Private:GroupToBeWritten) -and ($Private:UserToBeWritten)){
-        # Convert data as String
+        # Complete '$Script:Data' with data for each line + validation
+        $Private:CheckValidation = CheckUserGroupMembership
         $Script:Data += @"
 
-        $Private:Group;$Private:MemberToCheck;$Private:MemberInGroup
-"@ 
-}
-}
-Write-Host $Script:Data 
+        $Script:Group;$Script:MemberToCheck;$Private:CheckValidation
+"@  
+    }
+    Write-Host $Script:Data
 }
 
-function UserChecker {
+function UserExistanceChecker {
+    if($Private:UserExistanceTest = Get-ADUser -Identity $Script:MemberToCheck){
+        return $true    
+    }else{
+        return $False
+    }
+}
 
+function GroupExistanceChecker {
+    if ($Private:GroupExistanceTest = Get-ADGroup -Identity $Script:Group){
+        return $true
+    }else{
+        return $False
+    }
+}
+
+function CheckUserGroupMembership {
+    if ((UserExistanceChecker) -and (GroupExistanceChecker)){
+    # Checks if user is in a specific group only if user exists
+    if($Private:GroupMemberCheck = Get-ADGroupMember -Identity $Script:Group | Where-Object {$_.SamAccountName -eq $Script:MemberToCheck}){
+        Write-Host "true"
+        return $true
+    }else{
+        Write-Host "false"
+        return $False
+    }
+    }
 }
 
 # Extract all data to a file
 function DataExtract{
-    # Check the data
-    DataChecker
+    # Get the data
+    CsvGetdata
 
     # Converts data to an object
     $Private:PSObject = $Script:Data | ConvertFrom-Csv
