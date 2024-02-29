@@ -16,3 +16,33 @@
 	- Create a checker at the start of the script to check 5.1 version ?
   - Define concrete objectives with M. Glassey ( parameters to change/check )
   - Statégie de test à définir 
+
+Policy ->
+
+Bypass:
+- Une des ExecutionPolicy les moins restrictives de PowerShell
+- Aucun script est bloqué, tous peuvent s'éxecuter sans restrictions
++ Pratique dans le cadre de dépannages rapides ou dans le développement
+- Risque de sécurité si on exécute un script non-fiable
+
+RemoteSigned:
++ ExecutionPolicy + sécurité que le Bypass
++ Les scripts téléchargés en ligne, doivent être signés numériquement par un éditeur de confiance
++ Les scripts crées en local, peuvent être exécutés sans signature
++ Permet de s'assurer que les scripts externes sont de confiance et n'ont pas été édités depuis leurs publications grâce à la signature
++ Offre un équilibre entre sécurité et flexibilité
+
+AllSigned:
++ Exige une signature d'editeur de confiance obligatoirement 
+
+Signature ->
+Crée un certificat contenant une clé publique et d'autres informations comme le nom de l'emetteur, la période de validité etc..
+Le certificat est souvent signé par une autorité de certification pour garantir son authenticité
+Pour signer un script, un dev. peut utiliser sa clé privée pour créer une signature numérique du script.
+
+Lors de l'exécution sur un système, PowerShell vérifie la signature du script avec le certificat public correspondant, S'il arrive
+à valider la signature à l'aide du certificat public, il confirmera que le script n'a pas été modifié depuis qu'il a été signé et que le script
+provient bien de l'émetteur initial.
+
+Résumé: Le processus repose sur l'utilisation de clés cryptographiques pour créer une signature numérique du script, qui peut ensuite être vérifiée
+	à l'aide du certificat public correspondant pour garantir son authenticité et son intégrité

@@ -121,8 +121,9 @@ function UserExistanceChecker {
 
 function GroupExistanceChecker {
     if ($Private:GroupExistanceTest = Get-ADGroup -Identity $Script:Group){
-        return $true
-    }else{
+            return $true
+        }
+    else{
         return $False
     }
 }
