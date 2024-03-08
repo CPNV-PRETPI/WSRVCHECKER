@@ -2,6 +2,8 @@
 	- https://www.microsoft.com/fr-fr/evalcenter/download-windows-server-2022
 Comparaison editeur de texte ( VSCode - PowerShell ISE )
 	- https://locall.host/vscode-vs-powershell-ise/
+Comparaison environnements
+	- https://learn.microsoft.com/en-us/dotnet/api/microsoft.powershell.commands.computerinfo?view=powershellsdk-1.1.0
 Code:
 	- https://dev.to/this-is-learning/how-to-write-better-powershell-scripts-architecture-and-best-practices-emh
 	- https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_comparison_operators?view=powershell-7.4

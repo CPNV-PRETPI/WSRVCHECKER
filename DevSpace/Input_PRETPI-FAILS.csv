@@ -1,0 +1,15 @@
+Group;MemberToCheck
+;
+;nnribeirnu
+CHAVE LMS Users;
+CHAVE ExistePas;nnlavaudma
+CHAVE LMS USERS;UserExistePas
+CHAVE ExistePas;UserExistePas
+CHAVE LMS Users;nnribeirnu
+CHAVE LMS Users;nnpetterth
+CHAVE LMS Users;nnlavaudma
+CHAVE LMS Users;nnbottemar
+CHAVE Beamex Administrators;nnribeirnu
+CHAVE Beamex Administrators;nnlavaudma
+CHAVE Beamex Administrators;nnbottemar
+CHAVE Beamex Administrators;nnpetterth
