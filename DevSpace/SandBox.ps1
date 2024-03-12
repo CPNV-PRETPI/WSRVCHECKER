@@ -16,13 +16,13 @@
     C:\Temp\
  
 .EXAMPLE
-    powershell.exe .\\Test.ps1 -ExecutionPolicy Bypass -InputFile C:\Temp\Input_PreTPI-WORKS.csv -OutputFolder C:\Temp\
+    powershell.exe .\\Test.ps1 -ExecutionPolicy Bypass -InputFile C:\Temp\Input_PreTPI-FAILS.csv -OutputFolder C:\Temp\
     Runs the script with the specified ExecutionPolicy and result file
 #>
 
 param(
     
-    [Parameter(Mandatory="Bypass")]
+    [Parameter(Mandatory=$true)]
     [string]$ExecutionPolicy,
         
     [Parameter(Mandatory=$true)]
@@ -93,8 +93,8 @@ function CheckAdminRights {
     }
 }
 
-# Check if OutputFolder parameter is accessible
-function CsvOutputFile{
+# Check if OutputFolder parameter exists and is accessible
+function CsvOutputFolder{
     if(!(Test-Path $Script:OutputFolder))
     {
         WriteLog "Parameter: Outputfolder path is inaccessible"
@@ -108,7 +108,6 @@ function CsvInputFile {
     try{
         # Extraction of the csv file
         $Script:Csv = Import-CSV -Path $InputFile -Delimiter ";"
-
         }catch{
             WriteLog "Parameter: Import CSV file failed"
             Exit
@@ -117,7 +116,6 @@ function CsvInputFile {
 
 # Check CsvInputFile data
 function CsvGetdata{
-    CsvInputFile
     $Script:Data = @" 
         Group;MemberToCheck;Validation  
 "@
@@ -129,9 +127,7 @@ function CsvGetdata{
         $Private:CheckValidation = CheckUserGroupMembership
         
         # Write Data to be exported in string
-        $Private:UserExistanceChecker = UserExistanceChecker
-        $Private:GroupChecker = GroupChecker
-        if (($Private:GroupChecker) -and ($Private:UserExistanceChecker)){
+        if (($Script:GroupChecker) -and ($Script:UserExistanceChecker)){
                 $Script:Data += @"
 
                 $Script:Group;$Script:MemberToCheck;$Private:CheckValidation
@@ -140,29 +136,25 @@ function CsvGetdata{
     }
 }
 
-# 
+
 function UserExistanceChecker {
     try{
-        if($Script:MemberToCheck -eq ""){
-        WriteLog "AdCheck: Member Value is missing"
-    }else{
         if($Private:UserExistanceTest = Get-ADUser -Identity $Script:MemberToCheck){
             return $true    
         }
     }
-    }catch{
+    catch{
         if(!($Private:UserExistanceChecker)){
-        WriteLog "AdCheck: '$Script:MemberToCheck' doesn't exist or is not accessible"
-        return $False
+            WriteLog "AdCheck: Member ->'$Script:MemberToCheck' doesn't exist or is not accessible"
+            return $False
     }
 }
+$Script:UserExistanceChecker = UserExistanceChecker
 }
+
 
 function GroupChecker {
     try{
-    if($Script:Group -eq ""){
-        WriteLog "AdCheck: Group Value is missing"
-    }else{
         if ($Private:GroupExistanceTest = Get-ADGroup -Identity $Script:Group){
             $Private:GroupEmptyRead = Get-ADGroup -Identity $Script:Group -Properties Members
             if($Private:GroupEmptyTest = $Private:GroupEmptyRead.Members.Count -ge 1){
@@ -170,15 +162,16 @@ function GroupChecker {
             }
         }
     }
-    }catch{
+    catch{
         if(!($Private:GroupExistanceTest)){
-            WriteLog "AdCheck: '$Script:Group' doesn't exist or is not accessible"
+            WriteLog "AdCheck: Group ->'$Script:Group' doesn't exist or is not accessible"
             return $False
         }elseif(!($Private:GroupEmptyTest)){
-            WriteLog "AdCheck: '$Script:Group' has no members"
+            WriteLog "AdCheck: Group ->'$Script:Group' has no members"
             return $False
     }
     }
+$Script:GroupChecker = GroupChecker
 }
 
 function CheckUserGroupMembership {
@@ -192,12 +185,6 @@ function CheckUserGroupMembership {
         }else{
             return $False
         }
-    }
-    if(!($Private:UserExistanceChecker)){
-        WriteLog "AdCheck: User doesn't exists or is not accessible" 
-    }
-    if(!($Private:GroupChecker)){
-        WriteLog "AdCheck: Group doesn't exists or is not accessible" 
     }
     }
 
@@ -216,19 +203,26 @@ function DataExtract{
     $Private:ZipFolderName = "$($Script:MachineName)_$Script:TimeStamp.zip"
     
     # Compress .txt files to a .zip folder
-    Compress-Archive -Path "$Script:OutputFolder\$Script:TimeStamp.csv",$Script:LogFile -DestinationPath "$Script:OutputFolder\$Private:ZipFolderName"
+    Compress-Archive -Path "$Script:OutputFolder\$Script:TimeStamp.csv",$Script:LogFile,$Script:InputFile -DestinationPath "$Script:OutputFolder\$Private:ZipFolderName"
 
     # Delete original files
-    Remove-Item -Path $Script:LogFile
-    Remove-Item -Path "$Script:OutputFolder\$Script:TimeStamp.csv"
-    # Remove-Item -Path "$Script:InputFile"
+    Remove-Item -Path $Script:LogFile 
+    Remove-Item -Path "$Script:OutputFolder\$Script:TimeStamp.csv" 
+    # Remove-Item -Path "$Script:InputFile" -Force
 }
+
+# Regroupe all checkers for the beginning of the script in one function
+function StartCheckers{
+    CheckExecutionPolicy
+    CheckAdminRights
+    CsvOutputFolder
+    CsvInputFile
+}
+
 #endregion
 
 #region Main
-CheckExecutionPolicy
-CheckAdminRights
-CsvOutputFile
+StartCheckers
 DataExtract
 Exit
 #endregion
