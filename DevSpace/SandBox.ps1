@@ -39,10 +39,11 @@ $Script:OutputFolder = $OutputFolder
 $Script:TimeStamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $Script:Data = ""
 $Script:Group = ""
-$Script:MemberToCheck = ""
+$Script:UserExistanceChecker = ""
 $Script:Csv = ""
 $Script:MachineName = Hostname
-$Script:LogFile = ""
+$Script:DomainName = "Nestle" 
+$Script:LogFile = "C:\Temp\Errors.log"
 #endregion
 
 #region Modules
@@ -57,33 +58,30 @@ function WriteLog{
         [Parameter(Mandatory=$true)]
         [string]$Private:Message
     )
-    $Private:LogFilePath = "C:\Temp"
-    $Private:LogFileName = "Errors.log"
-    $Script:LogFile = "$Private:LogFilePath\$Private:LogFileName"
-    if (!(Test-Path $Private:LogFilePath)){
-        New-Item -ItemType Directory -Path $Private:LogFilePath
-    }
+
     if(!(Test-Path $Script:LogFile)){
         try{
-            New-Item "$Script:LogFile" -ItemType File | Out-Null
+            New-Item $Script:LogFile -ItemType File | Out-Null
         }catch{
-            WriteLog "Parameter: Outputfolder path is inaccessible for logfile"
+            WriteLog "Parameter: LogFile is inaccessible"
         }
     }
     $Private:TimeStamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     $Private:LogMessage = "$Private:TimeStamp - $Private:Message"
-    Add-Content -Path "$Script:LogFile" -Value $Private:LogMessage
+    Add-Content -Path $Script:LogFile -Value $Private:LogMessage
 }
+
 # Check ExecutionPolicy
 function CheckExecutionPolicy{
     # Check Executionpolicy
     if($Script:ExecutionPolicy -ne "Bypass"){
-        WriteLog "Script ONLY runs with the ExecutionPolicy 'Bypass'!"
+        WriteLog "Rights: Script ONLY runs with the ExecutionPolicy 'Bypass'!"
         Exit 
     }else{
         Set-ExecutionPolicy -Scope Process -ExecutionPolicy $Script:ExecutionPolicy -Force
+    }
 }
-}
+
 # Check Privilieges
 function CheckAdminRights {
     $Private:IsAdmin = (New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
@@ -119,21 +117,24 @@ function CsvGetdata{
     $Script:Data = @" 
         Group;MemberToCheck;Validation  
 "@
+
     # Reading csv file  
     foreach($Private:Line in $Script:Csv){
         # Columns Assignment
         $Script:Group = $Private:Line.'Group'
         $Script:MemberToCheck = $Private:Line.'MemberToCheck'
         $Private:CheckValidation = CheckUserGroupMembership
-        
+
+        Write-Host $Private:CheckValidation
         # Write Data to be exported in string
-        if (($Script:GroupChecker) -and ($Script:UserExistanceChecker)){
+        if (($Private:GroupChecker) -and ($Private:UserExistanceChecker)){
                 $Script:Data += @"
 
                 $Script:Group;$Script:MemberToCheck;$Private:CheckValidation
 "@  
         }
     }
+    Write-Host $Script:Data
 }
 
 
@@ -147,16 +148,15 @@ function UserExistanceChecker {
         if(!($Private:UserExistanceChecker)){
             WriteLog "AdCheck: Member ->'$Script:MemberToCheck' doesn't exist or is not accessible"
             return $False
+        }
     }
-}
-$Script:UserExistanceChecker = UserExistanceChecker
 }
 
 
 function GroupChecker {
     try{
         if ($Private:GroupExistanceTest = Get-ADGroup -Identity $Script:Group){
-            $Private:GroupEmptyRead = Get-ADGroup -Identity $Script:Group -Properties Members
+            $Private:GroupEmptyRead = Get-ADGroup -Identity $Script:Group -Properties Members 
             if($Private:GroupEmptyTest = $Private:GroupEmptyRead.Members.Count -ge 1){
                 return $true
             }
@@ -171,22 +171,45 @@ function GroupChecker {
             return $False
     }
     }
-$Script:GroupChecker = GroupChecker
 }
 
 function CheckUserGroupMembership {
-    # Define and calls Group and user checker ( We don't call it in the 'if' to be sure that those functions aren't executed multiple times for one data check )
+
     $Private:UserExistanceChecker = UserExistanceChecker
     $Private:GroupChecker = GroupChecker
-    
     if (($Private:GroupChecker) -and ($Private:UserExistanceChecker)){
+        Write-Host "Group and User exists"
         if($Private:CheckUserGroupMemberShip = Get-ADGroupMember -Identity $Script:Group | Where-Object {$_.SamAccountName -eq $Script:MemberToCheck}){
             return $true
         }else{
             return $False
         }
     }
+}
+
+function RegistryKeyCheck {
+    # Define the Path and Value Name of RegistryKey
+    $Private:RegistryKey = "HKLM:\SOFTWARE\Nestle\"
+    $Private:RegistryValueName = "Roles"
+
+    # Get RegistryKey
+    $Private:RegistryKeyValue = Get-ItemPropertyValue -Path $Private:RegistryKey -Name $Private:RegistryValueName
+
+    # Check RegistryKey value
+    if ([string]::IsNullOrEmpty($Private:RegistryKeyValue)) {
+        WriteLog "Registry: Registry Key value is empty or null"
+    } else {
+        # Split the RegistryKey value with separator '#'
+        $Private:Roles = $Private:RegistryKeyValue.Split("#")
+        
+        # Gets each role of server and calls the right function for it
+        foreach ($Private:Role in $Private:Roles) {
+            if (!([string]::IsNullOrEmpty($Private:Role))) {
+                    # To Define
+            }
+        }
     }
+}
 
 # Extract all data to a .zip file
 function DataExtract{
@@ -203,16 +226,19 @@ function DataExtract{
     $Private:ZipFolderName = "$($Script:MachineName)_$Script:TimeStamp.zip"
     
     # Compress .txt files to a .zip folder
+    WriteLog "Trying to compress files.."
     Compress-Archive -Path "$Script:OutputFolder\$Script:TimeStamp.csv",$Script:LogFile,$Script:InputFile -DestinationPath "$Script:OutputFolder\$Private:ZipFolderName"
 
+    #
     # Delete original files
     Remove-Item -Path $Script:LogFile 
     Remove-Item -Path "$Script:OutputFolder\$Script:TimeStamp.csv" 
     # Remove-Item -Path "$Script:InputFile" -Force
+    
 }
 
 # Regroupe all checkers for the beginning of the script in one function
-function StartCheckers{
+function ScriptStartCheckers{
     CheckExecutionPolicy
     CheckAdminRights
     CsvOutputFolder
@@ -222,7 +248,7 @@ function StartCheckers{
 #endregion
 
 #region Main
-StartCheckers
+ScriptStartCheckers
 DataExtract
 Exit
 #endregion
