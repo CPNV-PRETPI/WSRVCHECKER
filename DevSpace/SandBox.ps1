@@ -40,9 +40,9 @@ $Script:TimeStamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $Script:Data = ""
 $Script:Group = ""
 $Script:UserExistanceChecker = ""
+$Script:GroupChecker = ""
 $Script:Csv = ""
-$Script:MachineName = Hostname
-$Script:DomainName = "Nestle" 
+$Script:MachineName = Hostname 
 $Script:LogFile = "C:\Temp\Errors.log"
 #endregion
 
@@ -100,7 +100,7 @@ function CsvOutputFolder{
     }
         }
 
-# Check if data is ok
+# Check if InputFile is readable
 function CsvInputFile {
     # Importation of CsvFile
     try{
@@ -124,13 +124,12 @@ function CsvGetdata{
         $Script:Group = $Private:Line.'Group'
         $Script:MemberToCheck = $Private:Line.'MemberToCheck'
         $Private:CheckValidation = CheckUserGroupMembership
-
-        Write-Host $Private:CheckValidation
+        
         # Write Data to be exported in string
-        if (($Private:GroupChecker) -and ($Private:UserExistanceChecker)){
+        if (($Script:GroupChecker) -and ($Script:UserExistanceChecker)){
                 $Script:Data += @"
-
-                $Script:Group;$Script:MemberToCheck;$Private:CheckValidation
+                
+                    $Script:Group;$Script:MemberToCheck;$Private:CheckValidation
 "@  
         }
     }
@@ -169,16 +168,15 @@ function GroupChecker {
         }elseif(!($Private:GroupEmptyTest)){
             WriteLog "AdCheck: Group ->'$Script:Group' has no members"
             return $False
-    }
+        }
     }
 }
 
 function CheckUserGroupMembership {
 
-    $Private:UserExistanceChecker = UserExistanceChecker
-    $Private:GroupChecker = GroupChecker
-    if (($Private:GroupChecker) -and ($Private:UserExistanceChecker)){
-        Write-Host "Group and User exists"
+    
+    
+    if (($Script:GroupChecker) -and ($Script:UserExistanceChecker)){
         if($Private:CheckUserGroupMemberShip = Get-ADGroupMember -Identity $Script:Group | Where-Object {$_.SamAccountName -eq $Script:MemberToCheck}){
             return $true
         }else{
@@ -229,7 +227,6 @@ function DataExtract{
     WriteLog "Trying to compress files.."
     Compress-Archive -Path "$Script:OutputFolder\$Script:TimeStamp.csv",$Script:LogFile,$Script:InputFile -DestinationPath "$Script:OutputFolder\$Private:ZipFolderName"
 
-    #
     # Delete original files
     Remove-Item -Path $Script:LogFile 
     Remove-Item -Path "$Script:OutputFolder\$Script:TimeStamp.csv" 
@@ -249,6 +246,7 @@ function ScriptStartCheckers{
 
 #region Main
 ScriptStartCheckers
+RegistryKeyCheck
 DataExtract
 Exit
 #endregion

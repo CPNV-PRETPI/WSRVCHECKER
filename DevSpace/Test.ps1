@@ -1,10 +1,10 @@
 ﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
-    Windows Server 2022 Parameters checker
+    WSrvChecker
  
 .DESCRIPTION
-    The script objective is to check values of specific parameters of a Windows Server 2022 and report it so that the administrator can check if a change is needed
+    The script objective is to check values of specific parameters of a Windows Server 2022 and report it to the administrator
 
 .PARAMETER ExecutionPolicy
     Bypass
@@ -16,13 +16,13 @@
     C:\Temp\
  
 .EXAMPLE
-    powershell.exe .\\Test.ps1 -ExecutionPolicy Bypass -InputFile C:\Temp\Input_PreTPI-WORKS.csv -OutputFolder C:\Temp\
+    powershell.exe .\\Test.ps1 -ExecutionPolicy Bypass -InputFile C:\Temp\Input_PreTPI-FAILS.csv -OutputFolder C:\Temp\
     Runs the script with the specified ExecutionPolicy and result file
 #>
 
 param(
     
-    [Parameter(Mandatory="Bypass")]
+    [Parameter(Mandatory=$true)]
     [string]$ExecutionPolicy,
         
     [Parameter(Mandatory=$true)]
@@ -36,11 +36,14 @@ param(
 $Script:ExecutionPolicy = $ExecutionPolicy
 $Script:InputFile = $InputFile
 $Script:OutputFolder = $OutputFolder
-$Script:Timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$Script:TimeStamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $Script:Data = ""
 $Script:Group = ""
-$Script:MemberToCheck = ""
+$Script:UserExistanceChecker = ""
+$Script:GroupChecker = ""
 $Script:Csv = ""
+$Script:MachineName = Hostname 
+$Script:LogFile = "C:\Temp\Errors.log"
 #endregion
 
 #region Modules
@@ -49,122 +52,223 @@ import-module ActiveDirectory
 
 #region Functions
 
-# Checks ExecutionPolicy
+# Write in logfile
+function WriteLog{
+    param (
+        [Parameter(Mandatory=$true)]
+        [string]$Private:Message
+    )
+
+    if(!(Test-Path $Script:LogFile)){
+        try{
+            New-Item $Script:LogFile -ItemType File | Out-Null
+        }catch{
+            WriteLog "Parameter: LogFile is inaccessible"
+        }
+    }
+    $Private:TimeStamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $Private:LogMessage = "$Private:TimeStamp - $Private:Message"
+    Add-Content -Path $Script:LogFile -Value $Private:LogMessage
+}
+
+# Check ExecutionPolicy
 function CheckExecutionPolicy{
     # Check Executionpolicy
     if($Script:ExecutionPolicy -ne "Bypass"){
-    Write-Host "*" -Foreground Red
-    Write-Host "* ERROR: Script ONLY runs with the ExecutionPolicy 'Bypass'!" -Foreground Red
-    Write-Host "* Script is canceled!" -Foreground Red
-    Write-Host "*" -Foreground Red
-    Exit 
+        WriteLog "Rights: Script ONLY runs with the ExecutionPolicy 'Bypass'!"
+        Exit 
     }else{
-    Set-ExecutionPolicy -Scope Process -ExecutionPolicy $Script:ExecutionPolicy -Force
-}
-}
-# Checks Privilieges
-function CheckAdminRights {
-$Private:IsAdmin = (New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-If (-Not $Private:IsAdmin) {
-  Write-Host "*" -Foreground Red
-  Write-Host "* ERROR: Script is NOT running with Administrators priviledges!" -Foreground Red
-  Write-Host "* Script is canceled!" -Foreground Red
-  Write-Host "*" -Foreground Red
-  Exit 
-}
+        Set-ExecutionPolicy -Scope Process -ExecutionPolicy $Script:ExecutionPolicy -Force
+    }
 }
 
-# Check if data is ok
-function CsvInputFile {
+# Check Privilieges
+function CheckAdminRights {
+    $Private:IsAdmin = (New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    If (-Not $Private:IsAdmin) {
+        WriteLog "Rights: Script is NOT running with Administrators priviledges!"
+        Exit 
+    }
+}
+
+# Check if OutputFolder parameter exists and is accessible
+function CheckCsvOutputFolder{
+    if(!(Test-Path $Script:OutputFolder))
+    {
+        WriteLog "Parameter: Outputfolder path is inaccessible"
+        Exit 
+    }
+        }
+
+# Check if InputFile is readable
+function CheckCsvInputFileAccessibility {
     # Importation of CsvFile
     try{
         # Extraction of the csv file
         $Script:Csv = Import-CSV -Path $InputFile -Delimiter ";"
-
         }catch{
-            Write-Host "*" -Foreground Red
-            Write-Host "* ERROR: Import CSV file failed" -Foreground Red
-            Write-Host "* Script is canceled!" -Foreground Red
-            Write-Host "*" -Foreground Red
+            WriteLog "Parameter: Import CSV file failed"
             Exit
         }
     }
 
-function CsvGetdata{
-    CsvInputFile
+# Check CsvInputFile data
+function GetCsvdata{
     $Script:Data = @" 
         Group;MemberToCheck;Validation  
 "@
+
     # Reading csv file  
     foreach($Private:Line in $Script:Csv){
         # Columns Assignment
         $Script:Group = $Private:Line.'Group'
         $Script:MemberToCheck = $Private:Line.'MemberToCheck'
-
-        # Complete '$Script:Data' with data for each line + validation
         $Private:CheckValidation = CheckUserGroupMembership
-        $Script:Data += @"
-
-        $Script:Group;$Script:MemberToCheck;$Private:CheckValidation
+        
+        # Write Data to be exported in string
+        if (($Script:GroupChecker) -and ($Script:UserExistanceChecker)){
+                $Script:Data += @"
+                
+                    $Script:Group;$Script:MemberToCheck;$Private:CheckValidation
 "@  
-    }
-    Write-Host $Script:Data
-}
-
-function UserExistanceChecker {
-    if($Private:UserExistanceTest = Get-ADUser -Identity $Script:MemberToCheck){
-        return $true    
-    }else{
-        return $False
-    }
-}
-
-function GroupExistanceChecker {
-    if ($Private:GroupExistanceTest = Get-ADGroup -Identity $Script:Group){
-            return $true
         }
-    else{
-        return $False
+    }
+}
+
+
+function CheckUserExistance {
+    try{
+        if($Private:UserExistanceTest = Get-ADUser -Identity $Script:MemberToCheck){
+            return $true    
+        }
+    }
+    catch{
+        if(!($Private:UserExistanceChecker)){
+            WriteLog "AdCheck: Member ->'$Script:MemberToCheck' doesn't exist or is not accessible"
+            return $False
+        }
+    }
+}
+
+function CheckGroup {
+    try{
+        if ($Private:GroupExistanceTest = Get-ADGroup -Identity $Script:Group){
+            $Private:GroupEmptyRead = Get-ADGroup -Identity $Script:Group -Properties Members 
+            if($Private:GroupEmptyTest = $Private:GroupEmptyRead.Members.Count -ge 1){
+                return $true
+            }
+        }
+    }
+    catch{
+        if(!($Private:GroupExistanceTest)){
+            WriteLog "AdCheck: Group ->'$Script:Group' doesn't exist or is not accessible"
+            return $False
+        }elseif(!($Private:GroupEmptyTest)){
+            WriteLog "AdCheck: Group ->'$Script:Group' has no members"
+            return $False
+        }
     }
 }
 
 function CheckUserGroupMembership {
-    if ((UserExistanceChecker) -and (GroupExistanceChecker)){
-    # Checks if user is in a specific group only if user exists
-    if($Private:GroupMemberCheck = Get-ADGroupMember -Identity $Script:Group | Where-Object {$_.SamAccountName -eq $Script:MemberToCheck}){
-        Write-Host "true"
-        return $true
-    }else{
-        Write-Host "false"
-        return $False
-    }
+    if (($Script:GroupChecker) -and ($Script:UserExistanceChecker)){
+        if($Private:CheckUserGroupMemberShip = Get-ADGroupMember -Identity $Script:Group | Where-Object {$_.SamAccountName -eq $Script:MemberToCheck}){
+            return $true
+        }else{
+            return $False
+        }
     }
 }
 
-# Extract all data to a file
-function DataExtract{
+function CheckServerRoles{
+    param($Private:RoleToFind)
+    
+    $Private:WonderwareRolesList = "WW17GR;WW17IDE;WW17AOS;WW17OI;WW17IT;WW17HIS;WW17HIC;WW17AIOG;WW17AIOH;WW20GR;WW20IDE;WW20AOS;WW20OI;WW20IT;WW20HIS;WW20HIC;WW20AIOG;WW20AIOH;WW20AIOHM;WW20AIOGM"
+    $Private:ThinmanagerDisRolesList = "RSTMGR11DIS;RSTMGR12DIS;RSTMGR13DIS"
+    $Private:ThinManagerSrvRolesList = "RSTMGR11SRV;RSTMGR12SRV;RSTMGR13SRV"
+    $Private:RockwellSrvInfRolesList = "RSFTAC11SRV;RSFTAC13SRV;RSFTAC11INF;RSFTAC13INF"
+    $Private:RockwellDevRolesList = "RSFTAC11Dev;RSFTAC13Dev"
+    $Private:DmoRolesList = "FEATDMO1RDN;FEATDMO1Std;DMO2RDN;DMO22RDN;DMO2ARCSTD;Dmo22ArcStd;Dmo22Std"
+
+    $Private:WonderwareRoles = $Private:WonderwareRolesList.Split(";")
+    $Private:ThinmanagerDisRoles = $Private:ThinmanagerDisRolesList.Split(";")
+    $Private:ThinManagerSrvRoles = $Private:ThinManagerSrvRolesList.Split(";")
+    $Private:RockwellSrvInfRoles = $Private:RockwellSrvInfRolesList.Split(";")
+    $Private:RockwellDevRoles = $Private:RockwellDevRolesList.Split(";")
+    $Private:DmoRoles = $Private:DmoRolesList.Split(";")
+
+    $Private:AdGroupAdministrators = "CH*WWAdministrators"
+    $Private:AdGroupRemoteDesktopUsers = "CH*WWAdministrators"
+
+    foreach ($Private:Role in $Private:WonderwareRoles){
+        if($Private:RoleToFind = $Private:Role){
+                Get-LocalGroupMember -Group "Administrators" -Member $Private:AdGroupAdministrators
+        }
+    }
+}
+
+function CheckRegistryKey {
+    # Define the Path and Value Name of RegistryKey
+    $Private:RegistryKey = "HKLM:\SOFTWARE\Nestle\"
+    $Private:RegistryValueName = "Roles"
+
+    # Get RegistryKey
+    $Private:RegistryKeyValue = Get-ItemPropertyValue -Path $Private:RegistryKey -Name $Private:RegistryValueName
+
+    # Check RegistryKey value
+    if ([string]::IsNullOrEmpty($Private:RegistryKeyValue)) {
+        WriteLog "Registry: Registry Key value is empty or null"
+    } else {
+        # Split the RegistryKey value with separator '#'
+        $Private:Roles = $Private:RegistryKeyValue.Split("#")
+        
+        # Gets each role of server and calls the right function for it
+        foreach ($Private:Role in $Private:Roles) {
+            if (!([string]::IsNullOrEmpty($Private:Role))) {
+                    # To Define
+            }
+        }
+    }
+}
+
+# Extract all data to a .zip file
+function ExtractData{
     # Get the data
-    CsvGetdata
+    GetCsvdata
 
     # Converts data to an object
     $Private:PSObject = $Script:Data | ConvertFrom-Csv
 
     # Export the data object to a CSV file
-    New-Item "$Script:OutputFolder\$Script:Timestamp.csv" -ItemType File | Out-Null
-    $Private:PSObject | Export-Csv -Path "$Script:OutputFolder\$Script:Timestamp.csv" -NoTypeInformation
+    $Private:PSObject | Export-Csv -Path "$Script:OutputFolder\$Script:TimeStamp.csv" -NoTypeInformation
 
-    # Define the .zip file name
-    $Private:ZipFolderName = "$Script:Timestamp.zip"
+    # Define the .zip folder name
+    $Private:ZipFolderName = "$($Script:MachineName)_$Script:TimeStamp.zip"
     
-    # Compress .txt files to a .zip folder
-    Compress-Archive -Path "$Script:OutputFolder\$Script:Timestamp.csv" -DestinationPath "$Script:OutputFolder\$Private:ZipFolderName"
+    # Compress files to a .zip folder
+    WriteLog "Trying to compress files.."
+    Compress-Archive -Path "$Script:OutputFolder\$Script:TimeStamp.csv",$Script:LogFile,$Script:InputFile -DestinationPath "$Script:OutputFolder\$Private:ZipFolderName"
+
+    # Delete original files
+    Remove-Item -Path $Script:LogFile 
+    Remove-Item -Path "$Script:OutputFolder\$Script:TimeStamp.csv" 
+    # Remove-Item -Path "$Script:InputFile" -Force
 }
+
+# Regroupe all checkers for the beginning of the script in one function
+function StartScriptCheckers{
+    CheckExecutionPolicy
+    CheckAdminRights
+    CheckCsvOutputFolder
+    CheckCsvInputFileAccessibility
+}
+
 #endregion
 
 #region Main
-CheckExecutionPolicy
-CheckAdminRights
-DataExtract
+StartScriptCheckers
+CheckRegistryKey
+ExtractData
 Exit
 #endregion
 
