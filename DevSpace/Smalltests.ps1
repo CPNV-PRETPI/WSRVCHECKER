@@ -1,10 +1,11 @@
-$LocalGroupMembers = Get-LocalGroupMember -Group "Administrators"
-$GroupExists = $false
+$Private:AdGroupAdministrators = @("CHORNAdministrators", "CHAVEAdministrators", "CHROMAdministrators")
+Write-Host $Private:AdGroupAdministrators
 
-foreach ($member in $LocalGroupMembers) {
-    if ($member.Name -eq "NESTLE\ChornWWAdministrators") {
-        $GroupExists = $true
-        break
-    }
+$Private:LocalGroupMembers = Get-LocalGroupMember -Group "Administrators"
+
+if($Private:AdGroupAdministrators -contains $Private:LocalGroupMembers){
+    Write-Host "bien vu"
+}else{
+    Write-Host "force"
 }
  

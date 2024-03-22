@@ -180,9 +180,8 @@ function CheckUserGroupMembership {
     }
 }
 
-function CheckServerRoles{
-    param($Private:RoleToFind)
-    
+function CheckServerRoles {
+
     $Private:WonderwareRolesList = "WW17GR;WW17IDE;WW17AOS;WW17OI;WW17IT;WW17HIS;WW17HIC;WW17AIOG;WW17AIOH;WW20GR;WW20IDE;WW20AOS;WW20OI;WW20IT;WW20HIS;WW20HIC;WW20AIOG;WW20AIOH;WW20AIOHM;WW20AIOGM"
     $Private:ThinmanagerDisRolesList = "RSTMGR11DIS;RSTMGR12DIS;RSTMGR13DIS"
     $Private:ThinManagerSrvRolesList = "RSTMGR11SRV;RSTMGR12SRV;RSTMGR13SRV"
@@ -197,12 +196,25 @@ function CheckServerRoles{
     $Private:RockwellDevRoles = $Private:RockwellDevRolesList.Split(";")
     $Private:DmoRoles = $Private:DmoRolesList.Split(";")
 
-    $Private:AdGroupAdministrators = "CH*WWAdministrators"
-    $Private:AdGroupRemoteDesktopUsers = "CH*WWAdministrators"
+    $Private:AdGroupAdministrators = @("CHORNWWAdministrators", "CHAVEWWAdministrators", "CHROMWWAdministrators")
+    $Private:AdGroupRemoteDesktopUsers = @("CHORNTMRemoteDesktopusers", "CHAVETMRemoteDesktopusers", "CHROMTMRemoteDesktopusers")
 
-    foreach ($Private:Role in $Private:WonderwareRoles){
-        if($Private:RoleToFind = $Private:Role){
-                Get-LocalGroupMember -Group "Administrators" -Member $Private:AdGroupAdministrators
+    # Check Role List extracted from server one by one
+    foreach ($Private:RoleFromServer in $Script:RolesFromServer) {
+        $Private:Found = $false
+        # Check Wonderware Role List one by one
+        foreach ($Private:WonderwareRole in $Private:WonderwareRoles) {
+            # Check if Role extracted from server corresponds to Wonderware Role
+            if ($Private:RoleFromServer -eq $Private:WonderwareRole) {
+                $Private:LocalGroupMembers = Get-LocalGroupMember -Group "Administrators"
+                # Check if Group searched is in local group members list
+                foreach ($Private:MemberLocalGroup in $Private:LocalGroupMembers){ 
+                    if($Private:MemberLocalGroup.Name -eq "NESTLE\ChornWWAdministrators"){
+                        $Private:Found = $true
+                        Write-Host $Private:MemberLocalGroup.Name
+                    }
+                }
+            }
         }
     }
 }

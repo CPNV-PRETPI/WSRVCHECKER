@@ -12,28 +12,49 @@ function CheckServerRoles {
     $Private:DmoRolesList = "FEATDMO1RDN;FEATDMO1Std;DMO2RDN;DMO22RDN;DMO2ARCSTD;Dmo22ArcStd;Dmo22Std"
 
     $Private:WonderwareRoles = $Private:WonderwareRolesList.Split(";")
-    $Private:ThinmanagerDisRoles = $Private:ThinmanagerDisRolesList.Split(";")
+    $Private:ThinManagerDisRoles = $Private:ThinmanagerDisRolesList.Split(";")
     $Private:ThinManagerSrvRoles = $Private:ThinManagerSrvRolesList.Split(";")
     $Private:RockwellSrvInfRoles = $Private:RockwellSrvInfRolesList.Split(";")
     $Private:RockwellDevRoles = $Private:RockwellDevRolesList.Split(";")
     $Private:DmoRoles = $Private:DmoRolesList.Split(";")
 
-    $Private:AdGroupAdministrators = "CHORNWWAdministrators"
-    $Private:AdGroupRemoteDesktopUsers = "CH*WWAdministrators"
+    $Private:AdGroupAdministrators = @("Nestle\CHORNWWAdministrators", "Nestle\CHAVEWWAdministrators", "Nestle\CHROMWWAdministrators")
+    $Private:AdGroupRemoteDesktopUsers = @("CHORNTMRemoteDesktopusers", "CHAVETMRemoteDesktopusers", "CHROMTMRemoteDesktopusers")
 
+    # Check Role List extracted from server one by one
     foreach ($Private:RoleFromServer in $Script:RolesFromServer) {
         $Private:Found = $false
+        
+        # Check Wonderware Role List one by one
         foreach ($Private:WonderwareRole in $Private:WonderwareRoles) {
            
+            # Check if Role extracted from server corresponds to Wonderware Role
             if ($Private:RoleFromServer -eq $Private:WonderwareRole) {
                 $Private:LocalGroupMembers = Get-LocalGroupMember -Group "Administrators"
                 
+                # Check each member of the specified local group
                 foreach ($Private:MemberLocalGroup in $Private:LocalGroupMembers){ 
-                    if($Private:MemberLocalGroup.Name -eq "NESTLE\ChornWWAdministrators"){
+                    if($Private:AdGroupAdministrators -contains $Private:MemberLocalGroup.Name){
                         $Private:Found = $true
-                        break
                     }else{
-                        Write-Host "Group CHORNWWADMINISTRATORS NOT FOUND"
+                        # To Define ( How do we choose which factory group we add )
+                    }
+                }
+            }
+        }
+        
+        # Check ThinManagerDis Role List one by one
+        foreach ($Private:ThinManagerRole in $Private:ThinManagerDisRoles) {
+           
+            # Check if Role extracted from server corresponds to Wonderware Role
+            if ($Private:RoleFromServer -eq $Private:ThinManagerRole) {
+                $Private:LocalGroupMembers = Get-LocalGroupMember -Group "Remote Desktop Users"
+                
+                # Check each member of the specified local group
+                foreach ($Private:MemberLocalGroup in $Private:LocalGroupMembers){ 
+                    if($Private:MemberLocalGroup.Name -eq "Nestle\$Private:AdGroupRemoteDesktopUsers"){
+                        $Private:Found = $true
+                        Write-Host $Private:MemberLocalGroup.Name
                     }
                 }
             }
@@ -41,7 +62,7 @@ function CheckServerRoles {
     }
 }
 
-function RegistryKeyCheck {
+function CheckRegistryKey {
     $Private:RegistryKey = "HKLM:\SOFTWARE\Nestle\"
     $Private:RegistryValueName = "Roles"
 
@@ -56,6 +77,6 @@ function RegistryKeyCheck {
     }
 }
 
-RegistryKeyCheck
+CheckRegistryKey
 pause
 pause
